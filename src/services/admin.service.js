@@ -41,31 +41,53 @@ const getAssignments = async (query = {}) => {
   const filter = {};
   if (query.courseId) filter.course = query.courseId;
 
+  // Only populate the course title; syllabus is fetched separately to avoid
+  // sending the full syllabus in every submission payload.
   const submissions = await AssignmentSubmission.find(filter)
     .populate("student", "name email")
-    .populate("course", "title syllabus")
+    .populate("course", "title")
     .populate("reviewer", "name")
     .sort({ createdAt: -1 });
 
-  // Add lesson title to each submission
-  const submissionsWithLessonTitle = submissions.map((sub) => {
-    const submissionObj = sub.toObject();
-    let lessonTitle = "Unknown Lesson";
+  // Build a lookup of lessonId -> { title, assignmentPrompt } for referenced courses
+  const courseIds = [
+    ...new Set(
+      submissions
+        .map((sub) => (sub.course && sub.course._id ? String(sub.course._id) : null))
+        .filter(Boolean)
+    ),
+  ];
 
-    if (sub.course && sub.course.syllabus) {
-      for (const module of sub.course.syllabus) {
+  const lessonLookup = new Map();
+  if (courseIds.length > 0) {
+    const courses = await Course.find({ _id: { $in: courseIds } })
+      .select("syllabus")
+      .lean();
+
+    for (const course of courses) {
+      for (const module of course.syllabus || []) {
         for (const lesson of module.lessons || []) {
-          if (String(lesson._id) === String(sub.lessonId)) {
-            lessonTitle = lesson.title;
-            submissionObj.assignmentPrompt = lesson.assignmentPrompt || "";
-            break;
-          }
+          lessonLookup.set(`${course._id}:${lesson._id}`, {
+            title: lesson.title,
+            assignmentPrompt: lesson.assignmentPrompt || "",
+          });
         }
-        if (lessonTitle !== "Unknown Lesson") break;
       }
     }
+  }
 
-    submissionObj.lessonTitle = lessonTitle;
+  const submissionsWithLessonTitle = submissions.map((sub) => {
+    const submissionObj = sub.toObject();
+    const courseId = sub.course && sub.course._id ? String(sub.course._id) : null;
+    const lessonInfo = courseId
+      ? lessonLookup.get(`${courseId}:${sub.lessonId}`)
+      : null;
+
+    submissionObj.lessonTitle = lessonInfo ? lessonInfo.title : "Unknown Lesson";
+    if (lessonInfo) {
+      submissionObj.assignmentPrompt = lessonInfo.assignmentPrompt;
+    }
+
     return submissionObj;
   });
 

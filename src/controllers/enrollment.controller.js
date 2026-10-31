@@ -2,10 +2,11 @@ const enrollmentService = require("../services/enrollment.service");
 
 const enrollCourse = async (req, res) => {
   try {
+    const body = req.body || {};
     const enrollment = await enrollmentService.enrollCourse(
       req.user.id,
       req.params.courseId,
-      req.body.batchId
+      body.batchId
     );
     res.status(201).json(enrollment);
   } catch (err) {
@@ -24,9 +25,10 @@ const myEnrollments = async (req, res) => {
 
 const completeLesson = async (req, res) => {
   try {
+    const body = req.body || {};
     const data = await enrollmentService.completeLesson(
       req.params.enrollId,
-      req.body.lessonId
+      body.lessonId
     );
     res.json(data);
   } catch (err) {

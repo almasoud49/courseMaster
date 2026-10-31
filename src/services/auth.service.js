@@ -5,18 +5,29 @@ const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
 const { sendWelcomeEmail } = require("./email.service");
 
-const register = async ({ name, email, password, role, adminKey }) => {
+const register = async ({ name, email, password, adminKey }) => {
   const exists = await User.findOne({ email });
   if (exists) throw new Error("Email already registered");
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // Code-12 bug: user can pass role directly in payload without adminKey verification
+  // Admin role is granted only when a valid adminKey is provided
+  let role = "student";
+  if (adminKey !== undefined && adminKey !== null && adminKey !== "") {
+    if (!process.env.ADMIN_REGISTRATION_KEY) {
+      throw new Error("Admin registration is disabled");
+    }
+    if (adminKey !== process.env.ADMIN_REGISTRATION_KEY) {
+      throw new Error("Invalid admin registration key");
+    }
+    role = "admin";
+  }
+
   const user = await User.create({
     name,
     email,
     passwordHash,
-    role: role || "student",
+    role,
   });
 
   const token = generateToken({ id: user._id, role: user.role });

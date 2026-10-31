@@ -8,3 +8,6 @@ yarn-error.log*
 .DS_Store
 .vscode
 .vercel
+POSTMAN_BUG_REPRODUCTION_GUIDE.md
+BUG_REPORT.md
+
